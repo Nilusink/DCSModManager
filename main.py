@@ -2,7 +2,7 @@
 main.py
 11. December 2023
 
-automatically restarts ssh-tunnels
+automatically syncs two folders (in this case for DCS)
 
 Author:
 Nilusink
