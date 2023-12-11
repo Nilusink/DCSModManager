@@ -46,7 +46,7 @@ def main():
         (dcs_sub_diff, dcs_mod_diff), (usb_sub_diff, usb_mod_diff) = res
 
         # print results
-        print(f"\n\n##### analysis result #####")
+        print(f"\n\n##### analysis result #####\n")
         for sub in dcs_sub_diff:
             print(f"{CLR_GREEN}\t+ {sub}{CLR_RESET}")
 
@@ -60,6 +60,14 @@ def main():
 
             for mod in usb_mod_diff[sub]:
                 print(f"{CLR_RED}\t\t- {mod}{CLR_RESET}")
+
+        if len(dcs_sub_diff) + len(usb_sub_diff) < 1:
+            if all([
+                sum([len(dcs_mod_diff[sub]) for sub in dcs_mod_diff]) < 1,
+                sum([len(usb_mod_diff[sub]) for sub in usb_mod_diff]) < 1,
+            ]):
+                print(f"\n{CLR_GREEN}Everything synced!{CLR_RESET}")
+                exit(0)
 
         while True:
             ans = input("\nAutomatically resolve your changes? (y/n): ")
