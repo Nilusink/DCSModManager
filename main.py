@@ -18,7 +18,7 @@ CLR_GREEN = "\033[0;32m"
 CLR_BLUE = "\033[0;34m"
 
 
-def main():
+def main() -> int:
     dcs_valid = True
     usb_valid = True
 
@@ -67,7 +67,7 @@ def main():
                 sum([len(usb_mod_diff[sub]) for sub in usb_mod_diff]) < 1,
             ]):
                 print(f"\n{CLR_GREEN}Everything synced!{CLR_RESET}")
-                exit(0)
+                return 0
 
         while True:
             ans = input("\nAutomatically resolve your changes? (y/n): ")
@@ -76,15 +76,18 @@ def main():
                 print("\nstarting copy")
                 dcs.resolve(usb)
                 print(f"\n{CLR_GREEN}resolved successfully{CLR_RESET}")
-                exit(0)
+                return 0
 
             elif ans.lower() == "n":
                 print("leaving... ")
-                exit(0)
+                return 0
 
             else:
                 print("please type either \"y\" to continue, or \"n\" to cancel")
 
 
 if __name__ == "__main__":
-    main()
+    rc = main()
+
+    input("\n\nPress enter to exit")
+    exit(rc)
