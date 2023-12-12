@@ -2,7 +2,7 @@
 _analyzer.py
 11. December 2023
 
-automatically restarts ssh-tunnels
+analyzes a folder
 
 Author:
 Nilusink
@@ -75,24 +75,9 @@ def max_version(*versions: str) -> str:
     """
     gets the max version
     """
-    max_v = (0, 0, 0)
-
-    # TODO: probably a much cleaner way to do this
-    for version in versions:
-        a, b, c = [int(n) for n in version.split(".")]
-
-        if a > max_v[0]:
-            max_v = (a, b, c)
-
-        elif a == max_v[0]:
-            if b > max_v[1]:
-                max_v = (a, b, c)
-
-            elif b == max_v[1]:
-                if c > max_v[2]:
-                    max_v = (a, b, c)
-
-    return ".".join([str(n) for n in max_v])
+    return ".".join(
+        map(str, max((tuple(map(int, v.split(".")))) for v in versions))
+    )
 
 
 def get_directory_size(directory: str) -> int:
@@ -366,4 +351,4 @@ class Analyzer:
 
 
 if __name__ == "__main__":
-    print(max_version("1.1.0", "0.1.0", "1.2.0", "2.0.0", "2.0.1"))
+    print(max_version("1.1.0", "0.1.0", "1.2.0", "2.0.0", "2.0.1", "2.1.0"))
