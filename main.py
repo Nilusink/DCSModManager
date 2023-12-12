@@ -105,6 +105,14 @@ def main() -> int:
 
         # print results
         # print unique folders
+        if len(dcs_sub_diff) + len(usb_sub_diff) < 1:
+            if all([
+                sum([len(dcs_mod_diff[sub]) for sub in dcs_mod_diff]) < 1,
+                sum([len(usb_mod_diff[sub]) for sub in usb_mod_diff]) < 1,
+            ]):
+                print(f"\n{CLR_GREEN}Everything synced!{CLR_RESET}")
+                return 0
+
         print(f"\n\n##### unsynced #####\n")
         for sub in dcs_sub_diff:
             print(f"{CLR_GREEN}\t+ {sub}{CLR_RESET}")
@@ -126,14 +134,6 @@ def main() -> int:
                     f"{CLR_RED}\t\t- {mod.name} "
                     f"({round(mod.size / (1024**3), 2)} GB){CLR_RESET}"
                 )
-
-        if len(dcs_sub_diff) + len(usb_sub_diff) < 1:
-            if all([
-                sum([len(dcs_mod_diff[sub]) for sub in dcs_mod_diff]) < 1,
-                sum([len(usb_mod_diff[sub]) for sub in usb_mod_diff]) < 1,
-            ]):
-                print(f"\n{CLR_GREEN}Everything synced!{CLR_RESET}")
-                return 0
 
         total_changed_size = sum([
             *[mod.size for sub in dcs_mod_diff for mod in usb_mod_diff[sub]],
