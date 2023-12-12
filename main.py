@@ -8,6 +8,7 @@ Author:
 Nilusink
 """
 from analyzer import Analyzer
+from tkinter import filedialog
 import os
 
 
@@ -19,14 +20,13 @@ CLR_BLUE = "\033[0;34m"
 
 
 def main() -> int:
+    os.system("color")  # enable colored terminal on windows
+
     dcs_valid = True
     usb_valid = True
 
-    # dcs_directory: str = input("DCS Saved Games Directory: ")
-    # usb_directory: str = input("Mods USB Directory: ")
-
-    dcs_directory: str = r"C:\Users\Nilusink\Saved Games\DCS.openbeta\Mods"
-    usb_directory: str = r"E:\Mods"
+    dcs_directory: str = filedialog.askdirectory(title="DCS Saved Games Directory")
+    usb_directory: str = filedialog.askdirectory(title="Mods USB Directory")
 
     # check if directories exist
     if not os.path.exists(dcs_directory):
@@ -170,5 +170,3 @@ if __name__ == "__main__":
     input("\n\nPress enter to exit")
     exit(rc)
 
-
-# TODO: tkinter filedialog

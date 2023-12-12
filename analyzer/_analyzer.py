@@ -68,7 +68,7 @@ def name_and_version(s: str) -> Mod:
     except AttributeError:
         ver = ""
 
-    return Mod(s.strip(ver).rstrip().lstrip(), ver, s, 0)
+    return Mod(s.strip(ver).lstrip("CH ").rstrip().lstrip(), ver, s, 0)
 
 
 def max_version(*versions: str) -> str:
