@@ -7,10 +7,11 @@ GUI for the analyzer
 Author:
 Nilusink
 """
+from concurrent.futures import ThreadPoolExecutor
+from ._analyzed_folder import AnalyzedFolder
 from pydantic import BaseModel
-from .._analyzer import Analyzer
-from tkinter import filedialog
 import customtkinter as ctk
+from PIL import Image
 import typing as tp
 import os
 
@@ -38,6 +39,11 @@ class ModManagerGUI(ctk.CTk):
         return super().__new__(cls)
 
     def __init__(self, *args, **kwargs) -> None:
+        # fixes things
+        self.__init_done = False
+
+        self._pool = ThreadPoolExecutor(max_workers=1)
+
         # load configuration
         self.load_config()
 
@@ -51,7 +57,7 @@ class ModManagerGUI(ctk.CTk):
         self.geometry("1000x800")
 
         self.grid_columnconfigure((0, 2), weight=1)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(list(range(1, 12)), weight=1)
 
         self.top_bar = ctk.CTkFrame(self, height=80, corner_radius=20)
         self.top_bar.grid(
@@ -64,66 +70,98 @@ class ModManagerGUI(ctk.CTk):
         )
 
         # dcs frame
-        self.dcs_frame = ctk.CTkFrame(self, corner_radius=20)
+        self.dcs_frame = AnalyzedFolder(
+            self,
+            self.set_path,
+            self._settings.dcs_saved_games_folder,
+            corner_radius=20,
+        )
         self.dcs_frame.grid(
             row=1,
             column=0,
+            rowspan=11,
             sticky="nsew",
             padx=20,
             pady=20
         )
 
-        self.dcs_frame.grid_columnconfigure(0, weight=1)
+        # center buttons
+        arrow = Image.open("./icons/straight-right-arrow.png")
+        sync = Image.open("./icons/synchronization.png")
+        l_arrow = arrow.rotate(180)
 
-        self.dcs_path_entry = ctk.CTkEntry(self.dcs_frame)
-        self.dcs_path_entry.grid(
-            row=0,
-            column=0,
-            padx=40,
-            pady=20,
-            sticky="ew"
+        right_arrow = ctk.CTkImage(arrow)
+        left_arrow = ctk.CTkImage(l_arrow)
+
+        sync_arrow = ctk.CTkImage(sync)
+
+        ctk.CTkButton(self, image=right_arrow, text="", width=50).grid(
+            row=5,
+            column=1
         )
-
-        if self._settings.dcs_saved_games_folder is not None:
-            self.dcs_path_entry.insert(0, self._settings.dcs_saved_games_folder)
-
-        def choose_dcs_folder(*_):
-            self.set_path(
-                "dcs",
-                filedialog.askdirectory(title="DCS Saved Games Directory")
-            )
-
-        ctk.CTkButton(
-            self.dcs_frame,
-            text="Choose",
-            command=choose_dcs_folder
-        ).grid(
-            row=0,
-            column=1,
-            padx=40,
-            pady=20
+        ctk.CTkButton(self, image=sync_arrow, text="", width=50).grid(
+            row=6,
+            column=1
+        )
+        ctk.CTkButton(self, image=left_arrow, text="", width=50).grid(
+            row=7,
+            column=1
         )
 
         # usb frame
-        self.usb_frame = ctk.CTkFrame(self, corner_radius=20)
+        self.usb_frame = AnalyzedFolder(
+            self,
+            self.set_path,
+            self._settings.usb_mods_folder,
+            corner_radius=20,
+        )
         self.usb_frame.grid(
             row=1,
             column=2,
+            rowspan=11,
             sticky="nsew",
             padx=20,
             pady=20
         )
 
-    def set_path(self, f: tp.Literal["dcs", "usb"], value: str) -> None:
-        if f == "dcs":
-            self._settings.dcs_saved_games_folder = value
-            self.dcs_path_entry.delete(0, ctk.END)
-            self.dcs_path_entry.insert(0, value)
+        self._side_status = {
+            self.dcs_frame: False,
+            self.usb_frame: False
+        }
 
-        elif f == "usb":
-            self._settings.usb_saved_games_folder = value
+        self.__init_done = True
 
-        self._save_config()
+    def set_path(
+            self,
+            instance: AnalyzedFolder,
+            value: str
+    ) -> None:
+        if self.__init_done:
+            if instance is self.dcs_frame:
+                self._settings.dcs_saved_games_folder = value
+
+            elif instance is self.usb_frame:
+                self._settings.usb_mods_folder = value
+
+            self._save_config()
+
+    def set_side_status(self, side: AnalyzedFolder, status: bool) -> None:
+        """
+        sets the sides status (if .parse is complete)
+        """
+        if side in self._side_status:
+            self._side_status[side] = status
+
+            if all(self._side_status.values()):
+                def run_analysis():
+                    analysis = self.dcs_frame.analyzer.diff(
+                        self.usb_frame.analyzer
+                    )
+
+                    self.dcs_frame.on_analysis(*analysis)
+                    self.usb_frame.on_analysis(*analysis[::-1])
+
+                self._pool.submit(run_analysis)
 
     def load_config(self, path: str = ...) -> bool:
         """
