@@ -37,14 +37,26 @@ class ModCollection:
 
 # types
 type mods_collection_t = dict[str, dict[str, ModCollection]]
-type diff_result_t = tuple[
-            list[str],
-            dict[str, list[ModCollection]],
-            dict[str, list[ModCollection]]
-]
+
+
+@dataclass(frozen=True)
+class DiffResult:
+    unique_subs: list[str]
+    unique_per_sub: dict[str, list[ModCollection]]
+    duplicates: dict[str, list[ModCollection]]
+    updates: dict[str, list[tuple[Mod, ModCollection]]]
 
 
 # helper functions
+def max_version(*versions: str) -> str:
+    """
+    gets the max version
+    """
+    return ".".join(
+        map(str, max((tuple(map(int, v.split(".")))) for v in versions))
+    )
+
+
 def find_uniques[T](a: tp.Iterable[T], b: tp.Iterable[T]) -> list[T]:
     """
     compare two lists and get the unique items from list a
@@ -53,6 +65,106 @@ def find_uniques[T](a: tp.Iterable[T], b: tp.Iterable[T]) -> list[T]:
     :param b: list to compare to
     """
     return [f for f in a if f not in b]
+
+
+def filter_list[T](li: tp.Iterable[T], item: str) -> list:
+    """
+    ([<class: a=1, b=2>, <class: a=4, b=3>], a) => [1, 2]
+
+    :param li: input list
+    :param item: item to filter
+    """
+    return [element.__getattribute__(item) for element in li]
+
+
+def find_uniques_and_updates(
+        a: tp.Iterable[ModCollection],
+        b: tp.Iterable[ModCollection]
+) -> tuple[
+    tuple[list[ModCollection], list[tuple[Mod, ModCollection]]],
+    tuple[list[ModCollection], list[tuple[Mod, ModCollection]]]
+]:
+    """
+    find uniques and updates
+
+    :returns: ( (a_uniques, a_updates), (b_uniques, b_updates) )
+    """
+    # prerequisites
+    a_names: list[str] = filter_list(a, "name")
+    b_names: list[str] = filter_list(b, "name")
+
+    all_mods = list(set(a_names) | set(b_names))
+    both = list(set(a_names) & set(b_names))
+
+    a_dict: dict[str, ModCollection] = {
+        name: value for name, value in zip(a_names, a)
+    }
+    b_dict: dict[str, ModCollection] = {
+        name: value for name, value in zip(b_names, b)
+    }
+
+    # filter uniques and updates
+    a_uniques: list[ModCollection] = []
+    b_uniques: list[ModCollection] = []
+
+    a_updates: list[tuple[Mod, ModCollection]] = []
+    b_updates: list[tuple[Mod, ModCollection]] = []
+
+    for mod_name in all_mods:
+        a_mod = a_dict[mod_name]
+        b_mod = b_dict[mod_name]
+
+        if mod_name not in a_names:
+            b_uniques.append(b_mod)
+
+        if mod_name not in b_names:
+            a_uniques.append(a_mod)
+
+        # check for updates
+        if mod_name in both:
+            a_versions = set(a_mod.versions)
+            b_versions = set(b_mod.versions)
+
+            # different versions
+            if a_versions != b_versions:
+                # check who has the highest version
+                highest = max_version(
+                    *a_versions,
+                    *b_versions
+                )
+
+                # both have the same highest version
+                if highest in a_versions and highest in b_versions:
+                    continue
+
+                if highest in a_versions:
+                    # set correct folder path (version number)
+                    folder_name = a_mod.folder_name.replace(
+                        a_mod.versions[0],
+                        highest
+                    )
+
+                    a_updates.append((
+                        Mod(a_mod.name, highest, folder_name, a_mod.size),
+                        b_mod
+                    ))
+
+                if highest in b_versions:
+                    # set correct folder path (version number)
+                    folder_name = b_mod.folder_name.replace(
+                        b_mod.versions[0],
+                        highest
+                    )
+
+                    b_updates.append((
+                        Mod(b_mod.name, highest, folder_name, b_mod.size),
+                        a_mod
+                    ))
+
+    return (
+        (a_uniques, a_updates),
+        (b_uniques, b_updates)
+    )
 
 
 def name_and_version(s: str) -> Mod:
@@ -69,15 +181,6 @@ def name_and_version(s: str) -> Mod:
         ver = ""
 
     return Mod(s.strip(ver).lstrip("CH ").rstrip().lstrip(), ver, s, 0)
-
-
-def max_version(*versions: str) -> str:
-    """
-    gets the max version
-    """
-    return ".".join(
-        map(str, max((tuple(map(int, v.split(".")))) for v in versions))
-    )
 
 
 def get_directory_size(directory: str) -> int:
@@ -100,18 +203,32 @@ class Analyzer:
     # structure: {"sub_module": {"mod": <Mod: name, version, folder_name}}
     _mods_per_sub: mods_collection_t
 
-    def __init__(self, directory: str) -> None:
-        self._directory = directory
+    __is_parsed: bool
 
+    def __init__(self, directory: str) -> None:
+        self.__is_parsed = False
+        self._directory = directory
         self._mods_per_sub = {}
 
     @property
     def directory(self) -> str:
         return self._directory
 
+    @directory.setter
+    def directory(self, value: str) -> None:
+        self._directory = value
+        self.__is_parsed = False
+
     @property
     def mods_per_sub(self) -> mods_collection_t:
         return self._mods_per_sub.copy()
+
+    @property
+    def is_parsed(self) -> bool:
+        """
+        returns true if `parse` has at least been called once
+        """
+        return self.__is_parsed
 
     def parse(self) -> None:
         """
@@ -153,10 +270,12 @@ class Analyzer:
                     vmod.name, [vmod.version], vmod.folder_name, vmod.size
                 )
 
+        self.__is_parsed = True
+
     def diff(
             self, other: tp.Self,
             print_results: bool = False
-    ) -> tuple[diff_result_t, diff_result_t]:
+    ) -> tuple[DiffResult, DiffResult]:
         """
         compare two directories
 
@@ -205,48 +324,57 @@ class Analyzer:
         own_unique_per_sub: dict[str, list[ModCollection]] = {
             sub: [] for sub in common_folders
         }
-        other_unique_per_sub: dict[str, list[ModCollection]] = {
+        own_updates_per_sub: dict[str, list[tuple[Mod, ModCollection]]] = {
             sub: [] for sub in common_folders
         }
+
+        other_unique_per_sub = own_unique_per_sub.copy()
+        other_updates_per_sub = own_updates_per_sub.copy()
+
         for sub_folder in common_folders:
             own_mods = self.mods_per_sub[sub_folder]
             other_mods = other.mods_per_sub[sub_folder]
 
             # find uniques (using the folders name)
-            tmp_own_mods_unique = find_uniques(
-                [mod.name for mod in own_mods.values()],
-                [mod.name for mod in other_mods.values()]
-            )
-            tmp_other_mods_unique = find_uniques(
-                [mod.name for mod in other_mods.values()],
-                [mod.name for mod in own_mods.values()]
+            match_result = find_uniques_and_updates(
+                own_mods.values(),
+                other_mods.values()
             )
 
-            # replace the name with the classes
-            own_mods_unique: list = []
-            other_mods_unique: list = []
-
-            for mod in own_mods.values():
-                if mod.name in tmp_own_mods_unique:
-                    own_mods_unique.append(mod)
-
-            for mod in other_mods.values():
-                if mod.name in tmp_other_mods_unique:
-                    other_mods_unique.append(mod)
+            own_mods_unique, own_updates = match_result[0]
+            other_mods_unique, other_updates = match_result[1]
 
             own_unique_per_sub[sub_folder] = own_mods_unique
+            own_updates_per_sub[sub_folder] = own_updates
+
             other_unique_per_sub[sub_folder] = other_mods_unique
+            other_updates_per_sub[sub_folder] = other_updates
 
             if print_results:
-                print(f"unique mods in {sub_folder} (self): {own_mods_unique}")
                 print(
-                    f"unique mods in {sub_folder} (other): {other_mods_unique}"
+                    f"unique mods in {sub_folder} (self): {own_mods_unique}\n"
+                    f"updates in {sub_folder} (self): {own_updates}"
+                )
+                print(
+                    f"unique mods in {sub_folder} (other): {other_mods_unique}\n"
+                    f"updates in {sub_folder} (other): {other_updates}"
                 )
 
-        return (
-            (own_sub_unique, own_unique_per_sub, own_duplicates),
-            (other_sub_unique, other_unique_per_sub, other_duplicates)
+        own = DiffResult(
+            own_sub_unique,
+            own_unique_per_sub,
+            own_duplicates,
+            own_updates_per_sub
         )
+
+        other = DiffResult(
+            other_sub_unique,
+            other_unique_per_sub,
+            other_duplicates,
+            other_updates_per_sub
+        )
+
+        return own, other
 
     def delete_duplicates(self, other: tp.Self) -> None:
         """
@@ -292,8 +420,11 @@ class Analyzer:
         """
         own_changes, other_changes = self.diff(other)
 
-        own_unique_sub, own_unique_mods, _ = own_changes
-        other_unique_sub, other_unique_mods, _ = other_changes
+        own_unique_sub = own_changes.unique_subs
+        own_unique_mods = own_changes.unique_per_sub
+
+        other_unique_sub = other_changes.unique_subs
+        other_unique_mods = other_changes.unique_per_sub
 
         # copy unique sub-folders
         for sub in own_unique_sub:

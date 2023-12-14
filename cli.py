@@ -1,5 +1,5 @@
 """
-main.py
+cli.py
 11. December 2023
 
 automatically syncs two folders (in this case for DCS)
@@ -48,28 +48,28 @@ def main() -> int:
         usb.parse()
 
         # compare
-        res = dcs.diff(usb, False)
-        (dcs_sub_diff, dcs_mod_diff, dcs_duplicates) = res[0]
-        (usb_sub_diff, usb_mod_diff, usb_duplicates) = res[1]
+        dcs_diff, usb_diff = dcs.diff(usb, True)
 
         # print duplicates
         print(f"\n\n##### analysis result #####\n")
         if sum(
-                [len(mod) for sub in dcs_duplicates for mod in dcs_duplicates[sub]]
-                + [len(mod) for sub in usb_duplicates for mod in usb_duplicates[sub]]
+                [len(mod) for sub in dcs_diff.duplicates
+                 for mod in dcs_diff.duplicates[sub]]
+                + [len(mod) for sub in usb_diff.duplicates
+                   for mod in usb_diff.duplicates[sub]]
         ) > 0:
             print(f"##### duplicates #####\n")
             print("(DCS)")
-            for sub in dcs_duplicates:
+            for sub in dcs_diff.duplicates:
                 print(f"\t* {sub}")
-                for mod in dcs_duplicates[sub]:
+                for mod in dcs_diff.duplicates [sub]:
                     print(f"{CLR_BLUE}\t\t- {mod.name} "
                           f"({', '.join(mod.versions)}){CLR_RESET}")
 
             print("\n(USB)")
-            for sub in usb_duplicates:
+            for sub in usb_diff.duplicates:
                 print(f"\t* {sub}")
-                for mod in usb_duplicates[sub]:
+                for mod in usb_diff.duplicates[sub]:
                     print(f"{CLR_BLUE}\t\t- {mod.name} "
                           f"({', '.join(mod.versions)}){CLR_RESET}")
 
@@ -87,9 +87,7 @@ def main() -> int:
                     print("parsing USB...")
                     usb.parse()
 
-                    res = dcs.diff(usb, False)
-                    (dcs_sub_diff, dcs_mod_diff, dcs_duplicates) = res[0]
-                    (usb_sub_diff, usb_mod_diff, usb_duplicates) = res[1]
+                    dcs_diff, usb_diff = dcs.diff(usb, False)
 
                     print(f"\n{CLR_GREEN}duplicates resolved "
                           f"successfully!{CLR_RESET}")
@@ -105,39 +103,57 @@ def main() -> int:
 
         # print results
         # print unique folders
-        if len(dcs_sub_diff) + len(usb_sub_diff) < 1:
+        if len(dcs_diff.unique_subs) + len(usb_diff.unique_subs) < 1:
             if all([
-                sum([len(dcs_mod_diff[sub]) for sub in dcs_mod_diff]) < 1,
-                sum([len(usb_mod_diff[sub]) for sub in usb_mod_diff]) < 1,
+                sum([len(dcs_diff.unique_per_sub[sub]) for sub in dcs_diff.unique_per_sub]) < 1,
+                sum([len(usb_diff.unique_per_sub[sub]) for sub in usb_diff.unique_per_sub]) < 1,
+                sum([len(dcs_diff.updates[sub]) for sub in dcs_diff.updates]) < 1,
+                sum([len(usb_diff.updates[sub]) for sub in usb_diff.updates]) < 1,
             ]):
                 print(f"\n{CLR_GREEN}Everything synced!{CLR_RESET}")
                 return 0
 
         print(f"\n\n##### unsynced #####\n")
-        for sub in dcs_sub_diff:
+        for sub in dcs_diff.unique_per_sub:
             print(f"{CLR_GREEN}\t+ {sub}{CLR_RESET}")
 
-        for sub in usb_sub_diff:
+        for sub in usb_diff.unique_per_sub:
             print(f"{CLR_RED}\t- {sub}{CLR_RESET}")
 
         # print mod differences
-        for sub in dcs_mod_diff.keys():
+        for sub in dcs_diff.unique_per_sub.keys():
             print(f"\t* {sub}")
-            for mod in dcs_mod_diff[sub]:
+            for mod in dcs_diff.unique_per_sub[sub]:
                 print(
                     f"{CLR_GREEN}\t\t+ {mod.name} "
                     f"({round(mod.size / (1024**3), 2)} GB){CLR_RESET}"
                 )
 
-            for mod in usb_mod_diff[sub]:
+            for update in usb_diff.updates[sub]:
+                print(
+                    f"{CLR_GREEN}\t\t+ {update[1].name} "
+                    f"({','.join(update[1].versions)}) => {update[0].version} "
+                    f"({round(update[0].size / (1024**3), 2)} GB){CLR_RESET}"
+                )
+
+            for mod in usb_diff.unique_per_sub[sub]:
                 print(
                     f"{CLR_RED}\t\t- {mod.name} "
                     f"({round(mod.size / (1024**3), 2)} GB){CLR_RESET}"
                 )
 
+            for update in dcs_diff.updates[sub]:
+                print(
+                    f"{CLR_RED}\t\t+ {update[1].name} "
+                    f"({','.join(update[1].versions)}) => {update[0].version} "
+                    f"({round(update[0].size / (1024**3), 2)} GB){CLR_RESET}"
+                )
+
         total_changed_size = sum([
-            *[mod.size for sub in dcs_mod_diff for mod in usb_mod_diff[sub]],
-            *[mod.size for sub in usb_sub_diff for mod in usb_sub_diff[sub]],
+            *[mod.size for sub in dcs_diff.unique_per_sub
+              for mod in usb_diff.unique_per_sub[sub]],
+            *[mod.size for sub in usb_diff.unique_per_sub
+              for mod in dcs_diff.unique_per_sub[sub]],
         ])
 
         while True:
