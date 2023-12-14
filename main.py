@@ -9,6 +9,7 @@ Nilusink
 """
 from analyzer import Analyzer
 from tkinter import filedialog
+import sys
 import os
 
 
@@ -20,7 +21,8 @@ CLR_BLUE = "\033[0;34m"
 
 
 def main() -> int:
-    os.system("color")  # enable colored terminal on windows
+    if sys.platform == "win32":
+        os.system("color")  # enable colored terminal on windows
 
     dcs_valid = True
     usb_valid = True
