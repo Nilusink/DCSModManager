@@ -48,7 +48,7 @@ def main() -> int:
         usb.parse()
 
         # compare
-        dcs_diff, usb_diff = dcs.diff(usb, True)
+        dcs_diff, usb_diff = dcs.diff(usb, False)
 
         # print duplicates
         print(f"\n\n##### analysis result #####\n")
@@ -114,10 +114,10 @@ def main() -> int:
                 return 0
 
         print(f"\n\n##### unsynced #####\n")
-        for sub in dcs_diff.unique_per_sub:
+        for sub in dcs_diff.unique_subs:
             print(f"{CLR_GREEN}\t+ {sub}{CLR_RESET}")
 
-        for sub in usb_diff.unique_per_sub:
+        for sub in usb_diff.unique_subs:
             print(f"{CLR_RED}\t- {sub}{CLR_RESET}")
 
         # print mod differences
@@ -144,16 +144,20 @@ def main() -> int:
 
             for update in dcs_diff.updates[sub]:
                 print(
-                    f"{CLR_RED}\t\t+ {update[1].name} "
+                    f"{CLR_RED}\t\t- {update[1].name} "
                     f"({','.join(update[1].versions)}) => {update[0].version} "
                     f"({round(update[0].size / (1024**3), 2)} GB){CLR_RESET}"
                 )
 
         total_changed_size = sum([
             *[mod.size for sub in dcs_diff.unique_per_sub
-              for mod in usb_diff.unique_per_sub[sub]],
-            *[mod.size for sub in usb_diff.unique_per_sub
               for mod in dcs_diff.unique_per_sub[sub]],
+            *[mod.size for sub in usb_diff.unique_per_sub
+              for mod in usb_diff.unique_per_sub[sub]],
+            *[mod[0].size for sub in dcs_diff.updates
+              for mod in dcs_diff.updates[sub]],
+            *[mod[0].size for sub in usb_diff.updates
+              for mod in usb_diff.updates[sub]],
         ])
 
         while True:

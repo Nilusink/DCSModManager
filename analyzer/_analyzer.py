@@ -111,14 +111,17 @@ def find_uniques_and_updates(
     b_updates: list[tuple[Mod, ModCollection]] = []
 
     for mod_name in all_mods:
-        a_mod = a_dict[mod_name]
-        b_mod = b_dict[mod_name]
+        if mod_name in b_names:
+            b_mod = b_dict[mod_name]
 
-        if mod_name not in a_names:
-            b_uniques.append(b_mod)
+            if mod_name not in a_names:
+                b_uniques.append(b_mod)
 
-        if mod_name not in b_names:
-            a_uniques.append(a_mod)
+        if mod_name in a_names:
+            a_mod = a_dict[mod_name]
+
+            if mod_name not in b_names:
+                a_uniques.append(a_mod)
 
         # check for updates
         if mod_name in both:
@@ -352,11 +355,13 @@ class Analyzer:
 
             if print_results:
                 print(
-                    f"unique mods in {sub_folder} (self): {own_mods_unique}\n"
+                    f"unique mods in {sub_folder} "
+                    f"(self): {own_mods_unique}\n"
                     f"updates in {sub_folder} (self): {own_updates}"
                 )
                 print(
-                    f"unique mods in {sub_folder} (other): {other_mods_unique}\n"
+                    f"unique mods in {sub_folder} "
+                    f"(other): {other_mods_unique}\n"
                     f"updates in {sub_folder} (other): {other_updates}"
                 )
 
@@ -420,21 +425,15 @@ class Analyzer:
         """
         own_changes, other_changes = self.diff(other)
 
-        own_unique_sub = own_changes.unique_subs
-        own_unique_mods = own_changes.unique_per_sub
-
-        other_unique_sub = other_changes.unique_subs
-        other_unique_mods = other_changes.unique_per_sub
-
         # copy unique sub-folders
-        for sub in own_unique_sub:
+        for sub in own_changes.unique_subs:
             origin = os.path.join(self.directory, sub)
             dest = os.path.join(other.directory, sub)
 
             print(f"copying \"{origin}\" to \"{dest}\"")
             shutil.copytree(origin, dest)
 
-        for sub in other_unique_sub:
+        for sub in other_changes.unique_subs:
             origin = os.path.join(other.directory, sub)
             dest = os.path.join(self.directory, sub)
 
@@ -442,7 +441,7 @@ class Analyzer:
             shutil.copytree(origin, dest)
 
         # copy mods
-        for sub_folder, mods in own_unique_mods.items():
+        for sub_folder, mods in own_changes.unique_per_sub.items():
             for mod in mods:
                 origin = os.path.join(
                     self.directory,
@@ -461,7 +460,7 @@ class Analyzer:
                 )
                 shutil.copytree(origin, dest)
 
-        for sub_folder, mods in other_unique_mods.items():
+        for sub_folder, mods in other_changes.unique_per_sub.items():
             for mod in mods:
                 origin = os.path.join(
                     other.directory,
@@ -479,6 +478,85 @@ class Analyzer:
                     f"(size: {round(mod.size / (1024**3), 2)} GB)"
                 )
                 shutil.copytree(origin, dest)
+
+        # update mods
+        # updates from other to own
+        for sub_folder, mods in other_changes.updates.items():
+            for mod in mods:
+                old_mods = mod[1]
+
+                # delete old versions
+                for version in old_mods.versions:
+                    folder_path = os.path.join(
+                        self.directory,
+                        sub_folder,
+                        old_mods.folder_name.replace(
+                            old_mods.versions[0],
+                            version
+                        )
+                    )
+
+                    print(f"deleting {folder_path}")
+                    shutil.rmtree(folder_path)
+
+                # copy new mod
+                new_mod = mod[0]
+                origin = os.path.join(
+                    other.directory,
+                    sub_folder,
+                    new_mod.folder_name
+                )
+
+                dest = os.path.join(
+                    self.directory,
+                    sub_folder,
+                    new_mod.folder_name
+                )
+
+                print(
+                    f"copying \"{origin}\" to \"{dest}\" "
+                    f"(size: {round(new_mod.size / (1024 ** 3), 2)} GB)"
+                )
+                shutil.copytree(origin, dest)
+
+            # updates from own to other
+            for sub_folder, mods in own_changes.updates.items():
+                for mod in mods:
+                    old_mods = mod[1]
+
+                    # delete old versions
+                    for version in old_mods.versions:
+                        folder_path = os.path.join(
+                            other.directory,
+                            sub_folder,
+                            old_mods.folder_name.replace(
+                                old_mods.versions[0],
+                                version
+                            )
+                        )
+
+                        print(f"deleting {folder_path}")
+                        shutil.rmtree(folder_path)
+
+                    # copy new mod
+                    new_mod = mod[0]
+                    origin = os.path.join(
+                        self.directory,
+                        sub_folder,
+                        new_mod.folder_name
+                    )
+
+                    dest = os.path.join(
+                        other.directory,
+                        sub_folder,
+                        new_mod.folder_name
+                    )
+
+                    print(
+                        f"copying \"{origin}\" to \"{dest}\" "
+                        f"(size: {round(new_mod.size / (1024 ** 3), 2)} GB)"
+                    )
+                    shutil.copytree(origin, dest)
 
 
 if __name__ == "__main__":
