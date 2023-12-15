@@ -1,9 +1,20 @@
+"""
+_analyzed_folder.py
+14. December 2023
+
+displays the mods
+
+Author:
+Nilusink
+"""
 from concurrent.futures import ThreadPoolExecutor
-from .._analyzer import Analyzer, DiffResult
 from tkinter import filedialog
 import customtkinter as ctk
 import typing as tp
 import os
+
+from .._analyzer import Analyzer, DiffResult
+from ._mod_slides import *
 
 
 if tp.TYPE_CHECKING:
@@ -180,11 +191,13 @@ class AnalyzedFolder(ctk.CTkFrame):
 
         for sub_folder in all_sub_folders:
             if changes_per_sub[sub_folder] > 0:
-                ctk.CTkLabel(
-                    self.mods_frame,
-                    text=sub_folder,
-                    justify="left"
-                ).pack(side="top")
+                SubFolder(
+                    sub_folder,
+                    self.mods_frame
+                ).pack(
+                    side="top",
+                    fill="x"
+                )
 
                 own_uniques_dict = {
                     mod.name: mod for mod in own.unique_per_sub[sub_folder]
@@ -219,8 +232,48 @@ class AnalyzedFolder(ctk.CTkFrame):
                 print(f"{sub_folder}, all: {all_in_sub}")
 
                 for mod in all_in_sub:
-                    ctk.CTkLabel(
-                        self.mods_frame,
-                        text=f"- {mod}",
-                        justify="left",
-                    ).pack(fill="x")
+                    widget: ctk.CTkFrame
+
+                    if mod in own_uniques_dict:
+                        widget = UniqueMod(
+                            own_uniques_dict[mod],
+                            self.mods_frame
+                        )
+
+                    elif mod in other_uniques_dict:
+                        widget = MissingMod(
+                            other_uniques_dict[mod],
+                            self.mods_frame
+                        )
+
+                    elif mod in own_updates_dict:
+                        widget = UpdateProvider(
+                            own_updates_dict[mod][0],
+                            self.mods_frame
+                        )
+
+                    elif mod in other_updates_dict:
+                        widget = UpdateConsumer(
+                            other_updates_dict[mod][1],
+                            self.mods_frame
+                        )
+
+                    elif mod in own_duplicates_dict:
+                        widget = Duplicate(
+                            own_duplicates_dict[mod],
+                            self.mods_frame
+                        )
+
+                    elif mod in other_duplicates_dict:
+                        widget = Placeholder(
+                            self.mods_frame
+                        )
+
+                    else:
+                        continue
+
+                    widget.pack(
+                        side="top",
+                        fill="x",
+                        pady=(5, 0)
+                    )
