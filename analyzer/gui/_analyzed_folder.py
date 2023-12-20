@@ -121,6 +121,7 @@ class AnalyzedFolder(ctk.CTkFrame):
             self._set_path_callback(self, value)
             self.path = value
 
+        self.parent.set_side_status(self, False)
         if os.path.isdir(value):
             self.analyzer.directory = value
             self._path_exists = True
@@ -162,7 +163,6 @@ class AnalyzedFolder(ctk.CTkFrame):
 
         else:
             self.statistics_text.set("not found")
-            self.parent.set_side_status(self, False)
 
             # automatically check if the directory exists in 2 seconds
             # -> could be an usb-stick that isn't yet plugged in
@@ -186,22 +186,44 @@ class AnalyzedFolder(ctk.CTkFrame):
         all_sub_folders = list(
             set(own.unique_per_sub.keys())
             | set(other.unique_per_sub.keys())
+            | set(own.unique_subs)
+            | set(other.unique_subs)
         )
         all_sub_folders.sort()
 
         changes_per_sub: dict[str, int] = {}
         for sub in all_sub_folders:
-            total = len(own.unique_per_sub[sub])
-            total += len(other.unique_per_sub[sub])
-            total += len(own.updates[sub])
-            total += len(other.updates[sub])
-            total += len(own.duplicates[sub])
-            total += len(other.duplicates[sub])
+            total = 0
+            if sub in own.unique_per_sub:
+                total += len(own.unique_per_sub[sub])
+
+            if sub in other.unique_per_sub:
+                total += len(other.unique_per_sub[sub])
+
+            if sub in own.updates:
+                total += len(own.updates[sub])
+
+            if sub in other.updates:
+                total += len(other.updates[sub])
+
+            if sub in own.duplicates:
+                total += len(own.duplicates[sub])
+
+            if sub in other.duplicates:
+                total += len(other.duplicates[sub])
 
             changes_per_sub[sub] = total
 
         for sub_folder in all_sub_folders:
-            if changes_per_sub[sub_folder] > 0:
+            if sub_folder in other.unique_subs:
+                Placeholder(
+                    self.mods_frame
+                ).pack(
+                    side="top",
+                    fill="x"
+                )
+
+            elif sub_folder in own.unique_subs:
                 SubFolder(
                     sub_folder,
                     self.mods_frame
@@ -210,6 +232,14 @@ class AnalyzedFolder(ctk.CTkFrame):
                     fill="x"
                 )
 
+            if changes_per_sub[sub_folder] > 0:
+                SubFolder(
+                    sub_folder,
+                    self.mods_frame
+                ).pack(
+                    side="top",
+                    fill="x"
+                )
                 own_uniques_dict = {
                     mod.name: mod for mod in own.unique_per_sub[sub_folder]
                 }

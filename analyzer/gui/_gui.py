@@ -9,6 +9,7 @@ Nilusink
 """
 from concurrent.futures import ThreadPoolExecutor
 from ._analyzed_folder import AnalyzedFolder
+from ._tooltip_button import TooltipButton
 from ._console_popup import ConsolePopup
 from pydantic import BaseModel
 import customtkinter as ctk
@@ -75,12 +76,16 @@ class ModManagerGUI(ctk.CTk):
         self.top_bar.grid_columnconfigure(list(range(20)), weight=1)
 
         duplicate = ctk.CTkImage(Image.open("./icons/duplicate.png"))
+        solution = ctk.CTkImage(Image.open("./icons/problem-solving.png"))
+        duplicate_resolve = ctk.CTkImage(Image.open("./icons/duplicate_resolve.png"))
+        reload = ctk.CTkImage(Image.open("./icons/reload.png"))
 
-        ctk.CTkButton(
+        TooltipButton(
             self.top_bar,
+            tip="remove duplicates",
             image=duplicate,
             text="",
-            width=50,
+            width=60,
             command=self._run_duplicates
         ).grid(
             row=0,
@@ -88,11 +93,12 @@ class ModManagerGUI(ctk.CTk):
             pady=10,
         )
 
-        ctk.CTkButton(
+        TooltipButton(
             self.top_bar,
-            image=duplicate,
+            tip="resolve uniques & updates",
+            image=solution,
             text="",
-            width=50,
+            width=60,
             command=self._run_resolve
         ).grid(
             row=0,
@@ -100,15 +106,29 @@ class ModManagerGUI(ctk.CTk):
             pady=10,
         )
 
-        ctk.CTkButton(
+        TooltipButton(
             self.top_bar,
-            image=duplicate,
+            tip="duplicates & resolve",
+            image=duplicate_resolve,
             text="",
-            width=50,
+            width=60,
             command=self._run_all
         ).grid(
             row=0,
             column=2,
+            pady=10,
+        )
+
+        TooltipButton(
+            self.top_bar,
+            tip="re-parse and compare",
+            image=reload,
+            text="",
+            width=60,
+            command=self.reload_mods
+        ).grid(
+            row=0,
+            column=19,
             pady=10,
         )
 
@@ -131,7 +151,6 @@ class ModManagerGUI(ctk.CTk):
         # center buttons
         arrow = Image.open("./icons/straight-right-arrow.png")
         double_arrow = Image.open("./icons/right-arrow.png")
-        sync = Image.open("./icons/synchronization.png")
 
         l_arrow = arrow.rotate(180)
         dl_arrow = double_arrow.rotate(180)
@@ -142,10 +161,9 @@ class ModManagerGUI(ctk.CTk):
         double_right_arrow = ctk.CTkImage(double_arrow)
         double_left_arrow = ctk.CTkImage(dl_arrow)
 
-        sync_arrow = ctk.CTkImage(sync)
-
-        ctk.CTkButton(
+        TooltipButton(
             self,
+            tip="write to usb & delete uniques",
             image=double_right_arrow,
             text="",
             width=50,
@@ -154,8 +172,9 @@ class ModManagerGUI(ctk.CTk):
             row=4,
             column=1
         )
-        ctk.CTkButton(
+        TooltipButton(
             self,
+            tip="write to usb",
             image=right_arrow,
             text="",
             width=50,
@@ -164,12 +183,9 @@ class ModManagerGUI(ctk.CTk):
             row=5,
             column=1
         )
-        ctk.CTkButton(self, image=sync_arrow, text="", width=50).grid(
-            row=6,
-            column=1
-        )
-        ctk.CTkButton(
+        TooltipButton(
             self,
+            tip="write to saved games",
             image=left_arrow,
             text="",
             width=50,
@@ -178,8 +194,9 @@ class ModManagerGUI(ctk.CTk):
             row=7,
             column=1
         )
-        ctk.CTkButton(
+        TooltipButton(
             self,
+            tip="write to saved games & delete uniques",
             image=double_left_arrow,
             text="",
             width=50,
@@ -210,7 +227,7 @@ class ModManagerGUI(ctk.CTk):
             self.usb_frame: False
         }
 
-        # sync scrollbars
+        # reload scrollbars
         # self.dcs_frame.mods_frame._scrollbar.configure(command=self.set_scrollbars)
         # self.usb_frame.mods_frame._scrollbar.configure(command=self.set_scrollbars)
         #
@@ -260,13 +277,13 @@ class ModManagerGUI(ctk.CTk):
             if all(self._side_status.values()):
                 def run_analysis():
                     analysis = self.dcs_frame.analyzer.diff(
-                        self.usb_frame.analyzer
+                        self.usb_frame.analyzer,
                     )
 
                     self.dcs_frame.on_analysis(*analysis)
                     self.usb_frame.on_analysis(*analysis[::-1])
 
-                self._pool.submit(run_analysis)
+                self._run_with_debug(run_analysis)
 
     def _run_duplicates(self) -> None:
         console_toplevel = ConsolePopup(self, "Resolving Duplicates")
