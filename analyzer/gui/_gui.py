@@ -9,6 +9,7 @@ Nilusink
 """
 from concurrent.futures import ThreadPoolExecutor
 from ._analyzed_folder import AnalyzedFolder
+from ._console_popup import ConsolePopup
 from pydantic import BaseModel
 import customtkinter as ctk
 from PIL import Image
@@ -59,6 +60,7 @@ class ModManagerGUI(ctk.CTk):
         self.grid_columnconfigure((0, 2), weight=1)
         self.grid_rowconfigure(list(range(1, 12)), weight=1)
 
+        # top bar
         self.top_bar = ctk.CTkFrame(self, height=80, corner_radius=20)
         self.top_bar.grid(
             row=0,
@@ -67,6 +69,47 @@ class ModManagerGUI(ctk.CTk):
             sticky="nsew",
             padx=20,
             pady=20
+        )
+
+        self.top_bar.grid_rowconfigure(0, weight=1)
+        self.top_bar.grid_columnconfigure(list(range(20)), weight=1)
+
+        duplicate = ctk.CTkImage(Image.open("./icons/duplicate.png"))
+
+        ctk.CTkButton(
+            self.top_bar,
+            image=duplicate,
+            text="",
+            width=50,
+            command=self._run_duplicates
+        ).grid(
+            row=0,
+            column=0,
+            pady=10,
+        )
+
+        ctk.CTkButton(
+            self.top_bar,
+            image=duplicate,
+            text="",
+            width=50,
+            command=self._run_resolve
+        ).grid(
+            row=0,
+            column=1,
+            pady=10,
+        )
+
+        ctk.CTkButton(
+            self.top_bar,
+            image=duplicate,
+            text="",
+            width=50,
+            command=self._run_all
+        ).grid(
+            row=0,
+            column=2,
+            pady=10,
         )
 
         # dcs frame
@@ -87,15 +130,37 @@ class ModManagerGUI(ctk.CTk):
 
         # center buttons
         arrow = Image.open("./icons/straight-right-arrow.png")
+        double_arrow = Image.open("./icons/right-arrow.png")
         sync = Image.open("./icons/synchronization.png")
+
         l_arrow = arrow.rotate(180)
+        dl_arrow = double_arrow.rotate(180)
 
         right_arrow = ctk.CTkImage(arrow)
         left_arrow = ctk.CTkImage(l_arrow)
 
+        double_right_arrow = ctk.CTkImage(double_arrow)
+        double_left_arrow = ctk.CTkImage(dl_arrow)
+
         sync_arrow = ctk.CTkImage(sync)
 
-        ctk.CTkButton(self, image=right_arrow, text="", width=50).grid(
+        ctk.CTkButton(
+            self,
+            image=double_right_arrow,
+            text="",
+            width=50,
+            command=lambda: self._run_oneway(False, True)
+        ).grid(
+            row=4,
+            column=1
+        )
+        ctk.CTkButton(
+            self,
+            image=right_arrow,
+            text="",
+            width=50,
+            command=lambda: self._run_oneway(False, False)
+        ).grid(
             row=5,
             column=1
         )
@@ -103,8 +168,24 @@ class ModManagerGUI(ctk.CTk):
             row=6,
             column=1
         )
-        ctk.CTkButton(self, image=left_arrow, text="", width=50).grid(
+        ctk.CTkButton(
+            self,
+            image=left_arrow,
+            text="",
+            width=50,
+            command=lambda: self._run_oneway(True, False)
+        ).grid(
             row=7,
+            column=1
+        )
+        ctk.CTkButton(
+            self,
+            image=double_left_arrow,
+            text="",
+            width=50,
+            command=lambda: self._run_oneway(True, True)
+        ).grid(
+            row=8,
             column=1
         )
 
@@ -129,7 +210,28 @@ class ModManagerGUI(ctk.CTk):
             self.usb_frame: False
         }
 
+        # sync scrollbars
+        # self.dcs_frame.mods_frame._scrollbar.configure(command=self.set_scrollbars)
+        # self.usb_frame.mods_frame._scrollbar.configure(command=self.set_scrollbars)
+        #
         self.__init_done = True
+    #
+    # def set_scrollbars(self, *args) -> None:
+    #     print(f"(debug): scrolling {args}")
+    #     self.dcs_frame.mods_frame._scrollbar.yview(*args)
+    #     self.dcs_frame.mods_frame._parent_canvas.yview(*args)
+    #
+    #     self.usb_frame.mods_frame._scrollbar.yview(*args)
+    #     self.usb_frame.mods_frame._parent_canvas.yview(*args)
+
+    def reload_mods(self) -> None:
+        """
+        forces both analyzers to reload
+        """
+        for side in self._side_status:
+            self._side_status[side] = False
+
+            side.set_path(side.analyzer.directory)
 
     def set_path(
             self,
@@ -149,6 +251,9 @@ class ModManagerGUI(ctk.CTk):
         """
         sets the sides status (if .parse is complete)
         """
+        if not self.__init_done:
+            return
+
         if side in self._side_status:
             self._side_status[side] = status
 
@@ -162,6 +267,83 @@ class ModManagerGUI(ctk.CTk):
                     self.usb_frame.on_analysis(*analysis[::-1])
 
                 self._pool.submit(run_analysis)
+
+    def _run_duplicates(self) -> None:
+        console_toplevel = ConsolePopup(self, "Resolving Duplicates")
+
+        self._pool.submit(lambda: self.dcs_frame.analyzer.delete_duplicates(
+            self.usb_frame.analyzer,
+            console_toplevel.print
+        ))
+
+    def _run_resolve(self) -> None:
+        console_toplevel = ConsolePopup(self, "Resolving Duplicates")
+
+        self._pool.submit(lambda: self.dcs_frame.analyzer.resolve(
+            self.usb_frame.analyzer,
+            console_toplevel.print
+        ))
+
+    def _run_all(self) -> None:
+        console_toplevel = ConsolePopup(self, "Resolving Duplicates")
+
+        self._pool.submit(lambda: self.dcs_frame.analyzer.delete_duplicates(
+            self.usb_frame.analyzer,
+            console_toplevel.print
+        ))
+        self._pool.submit(lambda: self.dcs_frame.analyzer.resolve(
+            self.usb_frame.analyzer,
+            console_toplevel.print
+        ))
+
+    def _run_with_debug[T, R](
+            self,
+            func: tp.Callable[[T], R],
+            *args: tp.Unpack[T],
+            **kwargs: tp.Unpack[T]
+    ) -> None:
+        def run_func():
+            print(f"(debug): running {func.__name__}, "
+                  f"args: {args}, kwargs: {kwargs}")
+            try:
+                func(*args, **kwargs)
+                print(f"(debug): {func.__name__} finished successfully")
+
+            except Exception as e:
+                print(f"(debug): {func.__name__} exception: {e}")
+                raise
+
+        self._pool.submit(run_func)
+
+    def _run_oneway(self, side: bool, delete: bool = True) -> None:
+        """
+        :param side: 0: Saved Games to USB, 1: USB to Saved Games
+        """
+        if side == 0:
+            console_toplevel = ConsolePopup(
+                self,
+                "Syncing from Saved Games to USB"
+            )
+
+            self._run_with_debug(
+                self.dcs_frame.analyzer.sync_one_way,
+                self.usb_frame.analyzer,
+                delete_unique=delete,
+                debug_func=console_toplevel.print
+            )
+
+        elif side == 0:
+            console_toplevel = ConsolePopup(
+                self,
+                "Syncing from USB to Saved Games"
+            )
+
+            self._run_with_debug(
+                self.usb_frame.analyzer.sync_one_way,
+                self.dcs_frame.analyzer,
+                delete_unique=delete,
+                debug_func=console_toplevel.print
+            )
 
     def load_config(self, path: str = ...) -> bool:
         """

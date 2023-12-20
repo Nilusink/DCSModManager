@@ -58,7 +58,18 @@ class AnalyzedFolder(ctk.CTkFrame):
             self.path_entry.insert(0, path)
 
         def choose_folder(*_):
-            value = filedialog.askdirectory(title="DCS Saved Games Directory")
+            value = filedialog.askdirectory(
+                title="DCS Saved Games Directory",
+                initialdir=self.path
+            )
+
+            print(f"setting \"{value}\"")
+
+            if value.strip() == "":
+                return
+
+            print(f"setting \"{value}\"")
+
             self.set_path(value)
 
         ctk.CTkButton(

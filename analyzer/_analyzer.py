@@ -381,13 +381,19 @@ class Analyzer:
 
         return own, other
 
-    def delete_duplicates(self, other: tp.Self) -> None:
+    def delete_duplicates(
+            self,
+            other: tp.Self,
+            debug_func: tp.Callable[..., None] = print
+    ) -> None:
         """
         delete all duplicates
         """
-        (*_, own_duplicates), (*_, other_duplicates) = self.diff(other)
-        other_duplicates: dict[str, list[ModCollection]]
-        own_duplicates: dict[str, list[ModCollection]]
+        debug_func("deleting duplicates...")
+
+        own_result, other_result = self.diff(other)
+        other_duplicates = other_result.duplicates
+        own_duplicates = own_result.duplicates
 
         for sub_folder, mods in own_duplicates.items():
             for mod in mods:
@@ -401,7 +407,7 @@ class Analyzer:
                             mod.folder_name.replace(mod.versions[0], version)
                         )
 
-                        print(f"deleting {folder_path}")
+                        debug_func(f"deleting {folder_path}")
                         shutil.rmtree(folder_path)
 
         for sub_folder, mods in other_duplicates.items():
@@ -416,13 +422,21 @@ class Analyzer:
                             mod.folder_name.replace(mod.versions[0], version)
                         )
 
-                        print(f"deleting {folder_path}")
+                        debug_func(f"deleting \"{folder_path}\"")
                         shutil.rmtree(folder_path)
 
-    def resolve(self, other: tp.Self) -> None:
+        debug_func("done!")
+
+    def resolve(
+            self,
+            other: tp.Self,
+            debug_func: tp.Callable[..., None] = print
+    ) -> None:
         """
         resolve conflicts
         """
+        debug_func("resolving desync...")
+
         own_changes, other_changes = self.diff(other)
 
         # copy unique sub-folders
@@ -430,14 +444,14 @@ class Analyzer:
             origin = os.path.join(self.directory, sub)
             dest = os.path.join(other.directory, sub)
 
-            print(f"copying \"{origin}\" to \"{dest}\"")
+            debug_func(f"copying \"{origin}\" to \"{dest}\"")
             shutil.copytree(origin, dest)
 
         for sub in other_changes.unique_subs:
             origin = os.path.join(other.directory, sub)
             dest = os.path.join(self.directory, sub)
 
-            print(f"copying \"{origin}\" to \"{dest}\"")
+            debug_func(f"copying \"{origin}\" to \"{dest}\"")
             shutil.copytree(origin, dest)
 
         # copy mods
@@ -454,7 +468,7 @@ class Analyzer:
                     mod.folder_name
                 )
 
-                print(
+                debug_func(
                     f"copying \"{origin}\" to \"{dest}\" "
                     f"(size: {round(mod.size / (1024**3), 2)} GB)"
                 )
@@ -473,7 +487,7 @@ class Analyzer:
                     mod.folder_name
                 )
 
-                print(
+                debug_func(
                     f"copying \"{origin}\" to \"{dest}\" "
                     f"(size: {round(mod.size / (1024**3), 2)} GB)"
                 )
@@ -496,7 +510,7 @@ class Analyzer:
                         )
                     )
 
-                    print(f"deleting {folder_path}")
+                    debug_func(f"deleting {folder_path}")
                     shutil.rmtree(folder_path)
 
                 # copy new mod
@@ -513,7 +527,7 @@ class Analyzer:
                     new_mod.folder_name
                 )
 
-                print(
+                debug_func(
                     f"copying \"{origin}\" to \"{dest}\" "
                     f"(size: {round(new_mod.size / (1024 ** 3), 2)} GB)"
                 )
@@ -535,7 +549,7 @@ class Analyzer:
                             )
                         )
 
-                        print(f"deleting {folder_path}")
+                        debug_func(f"deleting {folder_path}")
                         shutil.rmtree(folder_path)
 
                     # copy new mod
@@ -552,11 +566,137 @@ class Analyzer:
                         new_mod.folder_name
                     )
 
-                    print(
+                    debug_func(
                         f"copying \"{origin}\" to \"{dest}\" "
                         f"(size: {round(new_mod.size / (1024 ** 3), 2)} GB)"
                     )
                     shutil.copytree(origin, dest)
+
+        debug_func("done!")
+
+    def sync_one_way(
+            self,
+            other: tp.Self,
+            delete_unique: bool = False,
+            debug_func: tp.Callable[..., None] = print
+    ) -> None:
+        """
+        sync from self to other
+        """
+        debug_func("syncing")
+        own_changes, other_changes = self.diff(other)
+
+        # copy own unique folders
+        for sub in own_changes.unique_subs:
+            origin = os.path.join(self.directory, sub)
+            dest = os.path.join(other.directory, sub)
+
+            debug_func(f"copying \"{origin}\" to \"{dest}\"")
+            shutil.copytree(origin, dest)
+
+        # delete other unique
+        if delete_unique:
+            for sub in other_changes.unique_subs:
+                to_delete = os.path.join(other.directory, sub)
+
+                debug_func(f"deleting \"{to_delete}\"")
+                shutil.rmtree(to_delete)
+
+        # copy individual mods
+        for sub_folder, mods in own_changes.unique_per_sub.items():
+            for mod in mods:
+                origin = os.path.join(
+                    self.directory,
+                    sub_folder,
+                    mod.folder_name
+                )
+                dest = os.path.join(
+                    other.directory,
+                    sub_folder,
+                    mod.folder_name
+                )
+
+                debug_func(
+                    f"copying \"{origin}\" to \"{dest}\" "
+                    f"(size: {round(mod.size / (1024 ** 3), 2)} GB)"
+                )
+                shutil.copytree(origin, dest)
+
+        # delete other individual mods
+        if delete_unique:
+            for sub_folder, mods in other_changes.unique_per_sub.items():
+                for mod in mods:
+                    to_delete = os.path.join(
+                        other.directory,
+                        sub_folder,
+                        mod.folder_name
+                    )
+
+                    debug_func(
+                        f"deleting \"{to_delete}\""
+                        f"(size: {round(mod.size / (1024 ** 3), 2)} GB)"
+                    )
+                    shutil.rmtree(to_delete)
+
+        # update mods
+        # updates from own to other
+        for sub_folder, mods in own_changes.updates.items():
+            for mod in mods:
+                old_mods = mod[1]
+
+                # delete old versions
+                for version in old_mods.versions:
+                    folder_path = os.path.join(
+                        self.directory,
+                        sub_folder,
+                        old_mods.folder_name.replace(
+                            old_mods.versions[0],
+                            version
+                        )
+                    )
+
+                    debug_func(f"deleting \"{folder_path}\"")
+                    shutil.rmtree(folder_path)
+
+                # copy new mod
+                new_mod = mod[0]
+                origin = os.path.join(
+                    other.directory,
+                    sub_folder,
+                    new_mod.folder_name
+                )
+
+                dest = os.path.join(
+                    self.directory,
+                    sub_folder,
+                    new_mod.folder_name
+                )
+
+                debug_func(
+                    f"copying \"{origin}\" to \"{dest}\" "
+                    f"(size: {round(new_mod.size / (1024 ** 3), 2)} GB)"
+                )
+                shutil.copytree(origin, dest)
+
+        # delete new versions from other
+        if delete_unique:
+            for sub_folder, mods in other_changes.updates.items():
+                for mod in mods:
+                    # copy new mod
+                    new_mod = mod[0]
+                    origin = os.path.join(
+                        self.directory,
+                        sub_folder,
+                        new_mod.folder_name
+                    )
+
+                    debug_func(
+                        f"deleting \"{origin}\" "
+                        f"(size: {round(new_mod.size / (1024 ** 3), 2)} GB)"
+                    )
+                    shutil.rmtree(origin)
+
+        debug_func("done!")
 
 
 if __name__ == "__main__":
