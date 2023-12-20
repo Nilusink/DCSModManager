@@ -57,6 +57,9 @@ class AnalyzedFolder(ctk.CTkFrame):
         if path is not None:
             self.path_entry.insert(0, path)
 
+        else:
+            path = ""
+
         def choose_folder(*_):
             value = filedialog.askdirectory(
                 title="DCS Saved Games Directory",
